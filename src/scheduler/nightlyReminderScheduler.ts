@@ -1,4 +1,4 @@
-import cron from "node-cron";
+import cron, { type ScheduledTask } from "node-cron";
 import type { ReminderService } from "../reminders/reminderService.js";
 
 export interface NightlyReminderScheduleOptions {
@@ -9,7 +9,7 @@ export interface NightlyReminderScheduleOptions {
 export function scheduleNightlyReminder(
   reminderService: ReminderService,
   options: NightlyReminderScheduleOptions
-): cron.ScheduledTask {
+): ScheduledTask {
   if (!cron.validate(options.cronExpression)) {
     throw new Error(`Invalid reminder cron expression: ${options.cronExpression}`);
   }

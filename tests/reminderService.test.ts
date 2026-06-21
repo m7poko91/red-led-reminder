@@ -43,8 +43,9 @@ describe("ReminderService", () => {
   it("schedules one retry two minutes after a no-answer status", async () => {
     const voiceClient = new FakeVoiceClient();
     const state = new MemoryReminderStateStore();
+    let now = new Date("2026-06-21T21:00:00.000Z");
     const scheduledTimers: Array<{ callback: () => void; delayMs: number }> = [];
-    const service = createService(voiceClient, state, new Date("2026-06-21T21:00:00.000Z"), {
+    const service = createService(voiceClient, state, () => now, {
       setTimeout: (callback, delayMs) => {
         scheduledTimers.push({ callback, delayMs });
         return scheduledTimers.length as unknown as NodeJS.Timeout;
@@ -65,6 +66,7 @@ describe("ReminderService", () => {
     expect(scheduledTimers).toHaveLength(1);
     expect(scheduledTimers[0]?.delayMs).toBe(120_000);
 
+    now = new Date("2026-06-21T21:02:00.000Z");
     scheduledTimers[0]?.callback();
     await flushPromises();
 
@@ -79,8 +81,9 @@ describe("ReminderService", () => {
   it("does not schedule more retries after the configured retry limit", async () => {
     const voiceClient = new FakeVoiceClient();
     const state = new MemoryReminderStateStore();
+    let now = new Date("2026-06-21T21:00:00.000Z");
     const scheduledTimers: Array<{ callback: () => void; delayMs: number }> = [];
-    const service = createService(voiceClient, state, new Date("2026-06-21T21:00:00.000Z"), {
+    const service = createService(voiceClient, state, () => now, {
       setTimeout: (callback, delayMs) => {
         scheduledTimers.push({ callback, delayMs });
         return scheduledTimers.length as unknown as NodeJS.Timeout;
@@ -96,6 +99,7 @@ describe("ReminderService", () => {
       date: "2026-06-21"
     });
 
+    now = new Date("2026-06-21T21:02:00.000Z");
     scheduledTimers[0]?.callback();
     await flushPromises();
 
@@ -116,7 +120,7 @@ describe("ReminderService", () => {
 function createService(
   voiceClient: VoiceClient,
   state: ReminderStateRepository,
-  now: Date,
+  now: Date | (() => Date),
   timerOverrides: Partial<Pick<ConstructorParameters<typeof ReminderService>[2], "setTimeout">> = {}
 ): ReminderService {
   return new ReminderService(voiceClient, state, {
@@ -126,7 +130,7 @@ function createService(
       warn: () => undefined
     },
     maxRetryAttempts: 1,
-    now: () => now,
+    now: typeof now === "function" ? now : () => now,
     reminderMessage: "Hi. This is your 9 PM reminder to do your red LED laser.",
     retryDelayMs: 120_000,
     timeZone: "UTC",
