@@ -10,6 +10,8 @@ The service:
 - Retries 2 minutes later when Twilio reports `no-answer`, `busy`, `failed`, or `canceled`.
 - Stops after the configured retry limit so a bad phone state does not create an unlimited call loop.
 
+The app must be running with valid Twilio credentials at 9 PM for the scheduled call to happen. If it is not deployed/running, no phone call can be placed.
+
 ## How it works
 
 This is a small TypeScript/Node service:
@@ -35,7 +37,7 @@ This is a small TypeScript/Node service:
 
 3. Fill in `.env`:
 
-   - `TARGET_PHONE_NUMBER`: your phone number, for example `+15551234567`
+   - `TARGET_PHONE_NUMBER`: `+18473442559`
    - `TWILIO_FROM_NUMBER`: your Twilio voice-capable number
    - `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`
    - `WEBHOOK_BASE_URL`: a public HTTPS URL for this service
@@ -54,12 +56,22 @@ npm run build
 npm start
 ```
 
+## Trigger a missed reminder manually
+
+If the service was not running at 9 PM, configure `.env` and run:
+
+```sh
+npm run call-now
+```
+
+This uses the same idempotency rules as the nightly scheduler: it will not call again if the current local date has already been answered or has an active retry scheduled.
+
 ## Configuration
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `REMINDER_CRON_EXPRESSION` | `0 21 * * *` | Runs at 9 PM daily. |
-| `REMINDER_TIMEZONE` | `TZ` or `UTC` | Timezone used by the scheduler and nightly date key. |
+| `REMINDER_TIMEZONE` | `TZ` or `America/Chicago` | Timezone used by the scheduler and nightly date key. |
 | `RETRY_DELAY_MS` | `120000` | Delay before retrying a missed call. |
 | `MAX_RETRY_ATTEMPTS` | `1` | Additional calls after the first missed call. |
 | `REMINDER_MESSAGE` | Red LED reminder text | Spoken by Twilio during the call. |

@@ -22,7 +22,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   REMINDER_CRON_EXPRESSION: z.string().default("0 21 * * *"),
   REMINDER_MESSAGE: z.string().default("Hi. This is your 9 PM reminder to do your red LED laser."),
-  REMINDER_TIMEZONE: z.string().default(process.env.TZ ?? "UTC"),
+  REMINDER_TIMEZONE: z.string().default(process.env.TZ ?? "America/Chicago"),
   RETRY_DELAY_MS: z.coerce.number().int().positive().default(120_000),
   STATE_FILE_PATH: z.string().default("./data/reminder-state.json"),
   TARGET_PHONE_NUMBER: z.string().min(1),

@@ -1,26 +1,9 @@
-import { loadConfig } from "./config.js";
-import { ReminderService } from "./reminders/reminderService.js";
+import { createReminderRuntime } from "./runtime.js";
 import { scheduleNightlyReminder } from "./scheduler/nightlyReminderScheduler.js";
 import { createApp } from "./server.js";
-import { FileReminderStateStore } from "./state/reminderState.js";
-import { TwilioVoiceClient } from "./voice/twilioVoiceClient.js";
 
 async function main(): Promise<void> {
-  const config = loadConfig();
-  const stateStore = new FileReminderStateStore(config.stateFilePath);
-  const voiceClient = new TwilioVoiceClient({
-    accountSid: config.twilioAccountSid,
-    authToken: config.twilioAuthToken,
-    fromNumber: config.twilioFromNumber,
-    targetNumber: config.targetPhoneNumber,
-    webhookBaseUrl: config.webhookBaseUrl
-  });
-  const reminderService = new ReminderService(voiceClient, stateStore, {
-    maxRetryAttempts: config.maxRetryAttempts,
-    reminderMessage: config.reminderMessage,
-    retryDelayMs: config.retryDelayMs,
-    timeZone: config.timeZone
-  });
+  const { config, reminderService } = createReminderRuntime();
   const app = createApp({
     reminderService,
     twilioAuthToken: config.twilioAuthToken,
