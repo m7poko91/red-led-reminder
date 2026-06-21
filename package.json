@@ -1,0 +1,41 @@
+{
+  "name": "red-led-reminder",
+  "version": "1.0.0",
+  "description": "Nightly red LED laser text reminder with retry-until-acknowledged behavior.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "call-now": "tsx src/triggerNow.ts",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "text-now": "tsx src/triggerNow.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m7poko91/red-led-reminder.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/m7poko91/red-led-reminder/issues"
+  },
+  "homepage": "https://github.com/m7poko91/red-led-reminder#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node-cron": "^4.4.1",
+    "twilio": "^6.0.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
