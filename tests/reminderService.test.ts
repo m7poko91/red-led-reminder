@@ -1,51 +1,49 @@
 import { describe, expect, it } from "vitest";
 import { ReminderService } from "../src/reminders/reminderService.js";
 import type {
-  ReminderCallRequest,
-  ReminderCallResult,
+  MessagingClient,
+  ReminderMessageRequest,
+  ReminderMessageResult,
   ReminderRecord,
-  ReminderStateRepository,
-  VoiceClient
+  ReminderStateRepository
 } from "../src/reminders/types.js";
 
 describe("ReminderService", () => {
-  it("places one nightly call and suppresses additional calls after the call is answered", async () => {
-    const voiceClient = new FakeVoiceClient();
+  it("sends one nightly text and suppresses additional texts after DONE is received", async () => {
+    const messagingClient = new FakeMessagingClient();
     const state = new MemoryReminderStateStore();
-    const service = createService(voiceClient, state, new Date("2026-06-21T21:00:00.000Z"));
+    const service = createService(messagingClient, state, new Date("2026-06-21T21:00:00.000Z"));
 
-    const firstCall = await service.startNightlyReminder();
+    const firstText = await service.startNightlyReminder();
     const reminder = await state.getReminder("2026-06-21");
-    const attempt = reminder?.attempts[0];
 
-    expect(firstCall).toEqual({ placed: true });
-    expect(voiceClient.calls).toHaveLength(1);
-    expect(attempt).toBeDefined();
+    expect(firstText).toEqual({ placed: true });
+    expect(messagingClient.messages).toHaveLength(1);
+    expect(reminder?.attempts[0]).toBeDefined();
 
-    await service.handleCallStatus({
-      attemptId: attempt?.id,
-      callSid: "CA000001",
-      callStatus: "in-progress",
-      date: "2026-06-21"
+    await service.handleIncomingMessage({
+      body: "DONE",
+      from: "+18473442559",
+      messageSid: "SM_INBOUND"
     });
 
-    const duplicateCall = await service.startNightlyReminder();
+    const duplicateText = await service.startNightlyReminder();
 
-    expect(duplicateCall).toEqual({ placed: false, reason: "already_answered" });
-    expect(voiceClient.calls).toHaveLength(1);
+    expect(duplicateText).toEqual({ placed: false, reason: "already_acknowledged" });
+    expect(messagingClient.messages).toHaveLength(1);
 
     const nextNight = await service.startNightlyReminder(new Date("2026-06-22T21:00:00.000Z"));
 
     expect(nextNight).toEqual({ placed: true });
-    expect(voiceClient.calls).toHaveLength(2);
+    expect(messagingClient.messages).toHaveLength(2);
   });
 
-  it("schedules one retry two minutes after a no-answer status", async () => {
-    const voiceClient = new FakeVoiceClient();
+  it("schedules one retry two minutes after an unacknowledged text", async () => {
+    const messagingClient = new FakeMessagingClient();
     const state = new MemoryReminderStateStore();
     let now = new Date("2026-06-21T21:00:00.000Z");
     const scheduledTimers: Array<{ callback: () => void; delayMs: number }> = [];
-    const service = createService(voiceClient, state, () => now, {
+    const service = createService(messagingClient, state, () => now, {
       setTimeout: (callback, delayMs) => {
         scheduledTimers.push({ callback, delayMs });
         return scheduledTimers.length as unknown as NodeJS.Timeout;
@@ -53,15 +51,6 @@ describe("ReminderService", () => {
     });
 
     await service.startNightlyReminder();
-    const firstReminder = await state.getReminder("2026-06-21");
-    const firstAttempt = firstReminder?.attempts[0];
-
-    await service.handleCallStatus({
-      attemptId: firstAttempt?.id,
-      callSid: "CA000001",
-      callStatus: "no-answer",
-      date: "2026-06-21"
-    });
 
     expect(scheduledTimers).toHaveLength(1);
     expect(scheduledTimers[0]?.delayMs).toBe(120_000);
@@ -72,18 +61,22 @@ describe("ReminderService", () => {
 
     const retriedReminder = await state.getReminder("2026-06-21");
 
-    expect(voiceClient.calls).toHaveLength(2);
+    expect(messagingClient.messages).toHaveLength(2);
     expect(retriedReminder?.retry).toBeUndefined();
     expect(retriedReminder?.attempts).toHaveLength(2);
-    expect(retriedReminder?.attempts[1]?.retryForAttemptId).toBe(firstAttempt?.id);
+    expect(retriedReminder?.attempts[1]?.retryForAttemptId).toBe(retriedReminder?.attempts[0]?.id);
   });
 
-  it("does not schedule more retries after the configured retry limit", async () => {
-    const voiceClient = new FakeVoiceClient();
+  it("cancels the retry when a DONE reply arrives before the retry fires", async () => {
+    const messagingClient = new FakeMessagingClient();
     const state = new MemoryReminderStateStore();
     let now = new Date("2026-06-21T21:00:00.000Z");
     const scheduledTimers: Array<{ callback: () => void; delayMs: number }> = [];
-    const service = createService(voiceClient, state, () => now, {
+    const clearedTimers: NodeJS.Timeout[] = [];
+    const service = createService(messagingClient, state, () => now, {
+      clearTimeout: (timer) => {
+        clearedTimers.push(timer);
+      },
       setTimeout: (callback, delayMs) => {
         scheduledTimers.push({ callback, delayMs });
         return scheduledTimers.length as unknown as NodeJS.Timeout;
@@ -91,39 +84,50 @@ describe("ReminderService", () => {
     });
 
     await service.startNightlyReminder();
-    const firstAttempt = (await state.getReminder("2026-06-21"))?.attempts[0];
-    await service.handleCallStatus({
-      attemptId: firstAttempt?.id,
-      callSid: "CA000001",
-      callStatus: "no-answer",
-      date: "2026-06-21"
-    });
+    await service.handleIncomingMessage({ body: "ok" });
 
     now = new Date("2026-06-21T21:02:00.000Z");
     scheduledTimers[0]?.callback();
     await flushPromises();
 
-    const retryAttempt = (await state.getReminder("2026-06-21"))?.attempts[1];
-    await service.handleCallStatus({
-      attemptId: retryAttempt?.id,
-      callSid: "CA000002",
-      callStatus: "no-answer",
-      date: "2026-06-21"
+    expect(clearedTimers).toHaveLength(1);
+    expect(messagingClient.messages).toHaveLength(1);
+    expect((await state.getReminder("2026-06-21"))?.acknowledgedAt).toBeDefined();
+  });
+
+  it("does not schedule more retries after the configured retry limit", async () => {
+    const messagingClient = new FakeMessagingClient();
+    const state = new MemoryReminderStateStore();
+    let now = new Date("2026-06-21T21:00:00.000Z");
+    const scheduledTimers: Array<{ callback: () => void; delayMs: number }> = [];
+    const service = createService(messagingClient, state, () => now, {
+      setTimeout: (callback, delayMs) => {
+        scheduledTimers.push({ callback, delayMs });
+        return scheduledTimers.length as unknown as NodeJS.Timeout;
+      }
     });
 
-    expect(voiceClient.calls).toHaveLength(2);
+    await service.startNightlyReminder();
+
+    now = new Date("2026-06-21T21:02:00.000Z");
+    scheduledTimers[0]?.callback();
+    await flushPromises();
+
+    expect(messagingClient.messages).toHaveLength(2);
     expect(scheduledTimers).toHaveLength(1);
     expect((await state.getReminder("2026-06-21"))?.closedAt).toBeDefined();
   });
 });
 
 function createService(
-  voiceClient: VoiceClient,
+  messagingClient: MessagingClient,
   state: ReminderStateRepository,
   now: Date | (() => Date),
-  timerOverrides: Partial<Pick<ConstructorParameters<typeof ReminderService>[2], "setTimeout">> = {}
+  timerOverrides: Partial<
+    Pick<ConstructorParameters<typeof ReminderService>[2], "clearTimeout" | "setTimeout">
+  > = {}
 ): ReminderService {
-  return new ReminderService(voiceClient, state, {
+  return new ReminderService(messagingClient, state, {
     logger: {
       error: () => undefined,
       info: () => undefined,
@@ -138,22 +142,22 @@ function createService(
   });
 }
 
-class FakeVoiceClient implements VoiceClient {
-  readonly calls: ReminderCallRequest[] = [];
+class FakeMessagingClient implements MessagingClient {
+  readonly messages: ReminderMessageRequest[] = [];
 
-  async placeReminderCall(request: ReminderCallRequest): Promise<ReminderCallResult> {
-    this.calls.push(request);
+  async sendReminderMessage(request: ReminderMessageRequest): Promise<ReminderMessageResult> {
+    this.messages.push(request);
 
-    return { callSid: `CA${this.calls.length.toString().padStart(6, "0")}` };
+    return { messageSid: `SM${this.messages.length.toString().padStart(6, "0")}` };
   }
 }
 
 class MemoryReminderStateStore implements ReminderStateRepository {
   private readonly reminders = new Map<string, ReminderRecord>();
 
-  async findAttemptByCallSid(callSid: string) {
+  async findAttemptByMessageSid(messageSid: string) {
     for (const [date, reminder] of this.reminders.entries()) {
-      const attempt = reminder.attempts.find((item) => item.callSid === callSid);
+      const attempt = reminder.attempts.find((item) => item.messageSid === messageSid);
 
       if (attempt) {
         return { date, attempt: structuredClone(attempt) };

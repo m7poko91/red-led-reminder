@@ -1,23 +1,21 @@
-export type ReminderCallStatus =
+export type ReminderMessageStatus =
   | "created"
   | "queued"
-  | "initiated"
-  | "ringing"
-  | "in-progress"
-  | "answered"
-  | "completed"
-  | "no-answer"
-  | "busy"
+  | "accepted"
+  | "scheduled"
+  | "sent"
+  | "delivered"
+  | "undelivered"
   | "failed"
-  | "canceled";
+  | "acknowledged";
 
 export interface ReminderAttempt {
   id: string;
-  callSid?: string;
-  status: ReminderCallStatus | string;
+  messageSid?: string;
+  status: ReminderMessageStatus | string;
   startedAt: string;
   updatedAt: string;
-  answeredAt?: string;
+  acknowledgedAt?: string;
   completedAt?: string;
   retryForAttemptId?: string;
 }
@@ -29,7 +27,7 @@ export interface ScheduledRetry {
 
 export interface ReminderRecord {
   date: string;
-  answeredAt?: string;
+  acknowledgedAt?: string;
   closedAt?: string;
   retry?: ScheduledRetry;
   attempts: ReminderAttempt[];
@@ -41,7 +39,7 @@ export interface ReminderStateData {
 }
 
 export interface ReminderStateRepository {
-  findAttemptByCallSid(callSid: string): Promise<{ date: string; attempt: ReminderAttempt } | undefined>;
+  findAttemptByMessageSid(messageSid: string): Promise<{ date: string; attempt: ReminderAttempt } | undefined>;
   getReminder(date: string): Promise<ReminderRecord | undefined>;
   listReminders(): Promise<ReminderRecord[]>;
   updateReminder(
@@ -50,23 +48,29 @@ export interface ReminderStateRepository {
   ): Promise<ReminderRecord>;
 }
 
-export interface ReminderCallRequest {
+export interface ReminderMessageRequest {
   attemptId: string;
   date: string;
   message: string;
 }
 
-export interface ReminderCallResult {
-  callSid: string;
+export interface ReminderMessageResult {
+  messageSid: string;
 }
 
-export interface VoiceClient {
-  placeReminderCall(request: ReminderCallRequest): Promise<ReminderCallResult>;
+export interface MessagingClient {
+  sendReminderMessage(request: ReminderMessageRequest): Promise<ReminderMessageResult>;
 }
 
-export interface ReminderStatusCallback {
+export interface ReminderMessageStatusCallback {
   attemptId?: string;
-  callSid: string;
-  callStatus: string;
+  messageSid: string;
+  messageStatus: string;
   date?: string;
+}
+
+export interface IncomingReminderMessage {
+  body: string;
+  from?: string;
+  messageSid?: string;
 }

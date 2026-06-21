@@ -5,14 +5,14 @@ async function main(): Promise<void> {
   const result = await reminderService.startNightlyReminder();
 
   if (result.placed) {
-    console.info("Placed a red LED reminder call.");
+    console.info("Sent a red LED reminder text.");
     return;
   }
 
-  console.info(`No call placed: ${result.reason ?? "already handled"}.`);
+  console.info(`No text sent: ${result.reason ?? "already handled"}.`);
 }
 
 main().catch((error: unknown) => {
-  console.error("Failed to place red LED reminder call", error);
+  console.error("Failed to send red LED reminder text", error);
   process.exitCode = 1;
 });

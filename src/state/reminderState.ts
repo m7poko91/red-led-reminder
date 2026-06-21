@@ -10,18 +10,18 @@ import type {
 
 const attemptSchema = z.object({
   id: z.string(),
-  callSid: z.string().optional(),
+  messageSid: z.string().optional(),
   status: z.string(),
   startedAt: z.string(),
   updatedAt: z.string(),
-  answeredAt: z.string().optional(),
+  acknowledgedAt: z.string().optional(),
   completedAt: z.string().optional(),
   retryForAttemptId: z.string().optional()
 });
 
 const reminderSchema = z.object({
   date: z.string(),
-  answeredAt: z.string().optional(),
+  acknowledgedAt: z.string().optional(),
   closedAt: z.string().optional(),
   retry: z
     .object({
@@ -45,13 +45,13 @@ export class FileReminderStateStore implements ReminderStateRepository {
     this.filePath = filePath;
   }
 
-  async findAttemptByCallSid(
-    callSid: string
+  async findAttemptByMessageSid(
+    messageSid: string
   ): Promise<{ date: string; attempt: ReminderAttempt } | undefined> {
     const state = await this.readState();
 
     for (const [date, reminder] of Object.entries(state.reminders)) {
-      const attempt = reminder.attempts.find((item) => item.callSid === callSid);
+      const attempt = reminder.attempts.find((item) => item.messageSid === messageSid);
 
       if (attempt) {
         return { date, attempt: clone(attempt) };
